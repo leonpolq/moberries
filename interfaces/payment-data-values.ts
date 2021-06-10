@@ -1,5 +1,5 @@
 export interface PaymentDataValues {
-  cardNumber: number;
+  cardNumber: string;
   expirationDate: string;
-  securityCode: number;
+  securityCode: string;
 }

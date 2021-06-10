@@ -1,13 +1,16 @@
 import Head from 'next/head'
 
 import 'bootstrap/dist/css/bootstrap.min.css';
-import {Accordion, Badge, Card, Col, Container, Row,} from "react-bootstrap";
-import {API_SUBSCRIPTIONS, TabsEnum} from "../constants";
-import {Subscription} from "../components/subscription";
+
+import {Alert, Col, Container, Row,} from "react-bootstrap";
+import {API_POST_DATA, API_SUBSCRIPTIONS} from "../constants";
 import React, {useState} from "react";
 import {PaymentDataValues, SubscriptionValues} from "../interfaces";
 import {InferGetStaticPropsType} from "next";
-import {PaymentData} from "../components/payment-data";
+import {Information} from "../components/information";
+import {SubscriptionPlans} from "../interfaces/subscription-plans";
+import {ConfirmationValues} from "../interfaces/confirmation-values";
+import {Steps} from "../components/steps";
 
 const initialSubscriptionValues: SubscriptionValues = {
   gigabytes: 5,
@@ -16,9 +19,14 @@ const initialSubscriptionValues: SubscriptionValues = {
 }
 
 const initialPaymentDataValues: PaymentDataValues = {
-  cardNumber: 1,
+  cardNumber: '',
   expirationDate: '',
-  securityCode: 1,
+  securityCode: '',
+}
+
+const initialConfirmationValues: ConfirmationValues = {
+  email: '',
+  terms: false,
 }
 
 export const getStaticProps = async () => {
@@ -41,34 +49,53 @@ export const getStaticProps = async () => {
   }
 }
 
-type Plan = {
-  duration_months: number,
-  price_usd_per_gb: number
-};
-
-interface SubscriptionPlans {
-  subscription_plans: Array<Plan>
+interface PostDataInterface {
+  subscription: SubscriptionValues
+  paymentData: PaymentDataValues
+  confirmation: ConfirmationValues
 }
 
-function calculateDiscount(subscription: SubscriptionValues) {
-  return !subscription.upfrontPayment ? 1 : 0.9;
-}
-
-function calculatePrice(plan: Plan, subscription: SubscriptionValues) {
-  return plan.price_usd_per_gb * subscription.gigabytes * calculateDiscount(subscription);
+async function postData(data: PostDataInterface) {
+  return await (await fetch(API_POST_DATA, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  })).json()
 }
 
 export default function Home({plans, error}: InferGetStaticPropsType<typeof getStaticProps>) {
   const [subscription, setSubscription] = useState<SubscriptionValues>(initialSubscriptionValues)
   const [paymentData, setPaymentData] = useState<PaymentDataValues>(initialPaymentDataValues)
-  const [tab, setTab] = useState<TabsEnum>(TabsEnum.subscription)
+  const [confirmation, setConfirmation] = useState<ConfirmationValues>(initialConfirmationValues)
+  const [isLoading, setIsLoading] = useState<boolean>(false)
+  const [postError, setPostError] = useState<boolean>(false)
+  const [postSucceed, setPostSucceed] = useState<boolean>(false)
 
-  if (error || !plans) {
-    return <Badge variant="danger">There is some error during fetching resources!</Badge>
+  async function postDataRequest(data: PostDataInterface) {
+    try {
+      setIsLoading(true)
+      await postData(data)
+      setPostSucceed(true)
+    } catch (e) {
+      setPostError(true)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const plan = plans.subscription_plans
-    .find(plan => plan.duration_months === subscription.duration) as Plan
+  if (error || !plans) {
+    return <Alert variant="danger">There is some error during fetching resources!</Alert>
+  }
+
+  if (postError) {
+    return <Alert variant="danger">Sorry, something is wrong with posting data!</Alert>
+  }
+
+  if (isLoading) {
+    return <Alert variant="primary">Loading!</Alert>
+  }
 
   return (
     <Container>
@@ -80,62 +107,25 @@ export default function Home({plans, error}: InferGetStaticPropsType<typeof getS
 
       <Row>
         <Col>
-          <Card>
-            <Card.Body>
-              <Card.Title>General info</Card.Title>
-              <Card.Subtitle className="mb-2 text-muted">Subscription</Card.Subtitle>
-              <Card.Text>Duration: {subscription.duration} months</Card.Text>
-              <Card.Text>Amount of gigabytes in a cloud: {subscription.gigabytes} GB</Card.Text>
-              <Card.Text>Upfront payment: {subscription.upfrontPayment ? 'Yes' : 'No'}</Card.Text>
-              <Card.Subtitle className="mb-2 text-muted">Price</Card.Subtitle>
-              <Card.Text>
-                {calculatePrice(plan, subscription)}
-              </Card.Text>
-            </Card.Body>
-          </Card>
-          <Accordion defaultActiveKey={TabsEnum.subscription} activeKey={tab}>
-            <Card>
-              <Accordion.Toggle as={Card.Header} eventKey={TabsEnum.subscription}>
-                Select subscription parameters
-              </Accordion.Toggle>
-              <Accordion.Collapse eventKey={TabsEnum.subscription}>
-                <Card.Body>
-                  <Subscription
-                    initialValues={initialSubscriptionValues}
-                    onChange={setSubscription}
-                    onNext={() => {
-                      setTab(TabsEnum.paymentData)
-                    }}
-                  />
-                </Card.Body>
-              </Accordion.Collapse>
-            </Card>
-            <Card>
-              <Accordion.Toggle as={Card.Header} eventKey={TabsEnum.paymentData}>
-                Payment data
-              </Accordion.Toggle>
-              <Accordion.Collapse eventKey={TabsEnum.paymentData}>
-                <Card.Body>
-                  <PaymentData
-                    initialValues={paymentData}
-                    onChange={setPaymentData}
-                    onNext={() => {
-                      setTab(TabsEnum.confirmation)
-                    }}
-                    onPrevious={() => {
-                      setTab(TabsEnum.subscription)
-                    }}
-                  />
-                </Card.Body>
-              </Accordion.Collapse>
-            </Card>
-            <Card>
-              <Accordion.Toggle as={Card.Header} eventKey={TabsEnum.confirmation}>Confirmation</Accordion.Toggle>
-              <Accordion.Collapse eventKey={TabsEnum.confirmation}>
-                <Card.Body>Hello! I'm another body</Card.Body>
-              </Accordion.Collapse>
-            </Card>
-          </Accordion>
+          <Information subscription={subscription} plans={plans.subscription_plans}/>
+          {postSucceed
+            ? <Alert variant="primary">Submitted successfully!</Alert>
+            : (<Steps
+              onSubmit={async () => {
+                await postDataRequest({
+                  subscription,
+                  confirmation,
+                  paymentData
+                })
+              }}
+              subscription={subscription}
+              paymentData={paymentData}
+              confirmation={confirmation}
+              setSubscription={setSubscription}
+              setPaymentData={setPaymentData}
+              setConfirmation={setConfirmation}
+            />)
+          }
         </Col>
       </Row>
     </Container>
