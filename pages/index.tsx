@@ -3,7 +3,6 @@ import Head from 'next/head'
 import 'bootstrap/dist/css/bootstrap.min.css';
 
 import {Alert, Col, Container, Row,} from "react-bootstrap";
-import {API_POST_DATA, API_SUBSCRIPTIONS} from "../constants";
 import React, {useState} from "react";
 import {PaymentDataValues, SubscriptionValues} from "../interfaces";
 import {InferGetStaticPropsType} from "next";
@@ -31,7 +30,7 @@ const initialConfirmationValues: ConfirmationValues = {
 
 export const getStaticProps = async () => {
   try {
-    const res = await fetch(API_SUBSCRIPTIONS)
+    const res = await fetch(process.env.NEXT_PUBLIC_API_SUBSCRIPTIONS)
     const plans: SubscriptionPlans = await res.json()
 
     return {
@@ -56,7 +55,7 @@ interface PostDataInterface {
 }
 
 async function postData(data: PostDataInterface) {
-  return await (await fetch(API_POST_DATA, {
+  return await (await fetch(process.env.NEXT_PUBLIC_API_POST_DATA, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
